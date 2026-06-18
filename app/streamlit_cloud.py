@@ -134,7 +134,20 @@ def get_gemini_model():
     try:
         import google.generativeai as genai
         genai.configure(api_key=key)
-        return genai.GenerativeModel("gemini-1.5-flash")
+        # Try newer model names first (Google changed API naming)
+        model_names = [
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash-001",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro-latest",
+            "gemini-1.5-pro",
+        ]
+        for name in model_names:
+            try:
+                return genai.GenerativeModel(name)
+            except Exception:
+                continue
+        return None
     except Exception as e:
         st.error(f"Gemini init failed: {e}")
         return None
