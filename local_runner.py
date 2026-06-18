@@ -1,11 +1,11 @@
 """
-Sampada 2.0 Local Automation Runner
+Sampada 2.0 Local Automation Runner (Improved)
 Reads a JSON export from the cloud dashboard and executes Playwright
 headed-browser automation on the Sampada 2.0 portal.
 
 Usage:
     python local_runner.py --registry registry_1_for_local.json
-    python local_runner.py --registry registry_1_for_local.json --headed
+    python local_runner.py --registry registry_1_for_local.json --debug
 
 Requirements:
     pip install playwright
@@ -36,27 +36,101 @@ PORTAL_E_REGISTRY = f"{PORTAL_BASE}/#/citizen/e-registry"
 DEFAULT_GEO = {"latitude": 22.7196, "longitude": 75.8577}
 SLOW_MO_MS = 500
 
+# ── Anti-Detection Script ────────────────────────────────────────────
+ANTI_DETECT_SCRIPT = """
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en', 'hi'] });
+window.chrome = { runtime: {} };
+window.navigator.chrome = { runtime: {} };
+const originalQuery = window.navigator.permissions.query;
+window.navigator.permissions.query = (parameters) => (
+    parameters.name === 'notifications' ?
+    Promise.resolve({ state: Notification.permission }) :
+    originalQuery(parameters)
+);
+const getParameter = WebGLRenderingContext.prototype.getParameter;
+WebGLRenderingContext.prototype.getParameter = function(parameter) {
+    if (parameter === 37445) return 'Intel Inc.';
+    if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+    return getParameter(parameter);
+};
+"""
+
 
 def load_registry(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def launch_browser(headed: bool = True):
+def take_screenshot(page: Page, name: str, debug_dir: Path):
+    """Take a screenshot for debugging."""
+    try:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = debug_dir / f"{name}_{ts}.png"
+        page.screenshot(path=str(path), full_page=True)
+        print(f"  📸 Screenshot saved: {path}")
+    except Exception as e:
+        print(f"  Screenshot failed: {e}")
+
+
+def launch_browser(headed: bool = True, debug_dir: Path = None):
     p = sync_playwright().start()
-    args = ["--disable-blink-features=AutomationControlled"]
-    browser = p.chromium.launch(headless=not headed, args=args, slow_mo=SLOW_MO_MS)
+    
+    # More realistic browser args to avoid detection
+    args = [
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--window-size=1920,1080",
+        "--start-maximized",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--disable-gpu",
+        "--disable-features=IsolateOrigins,site-per-process",
+        "--disable-site-isolation-trials",
+        "--disable-web-security",
+        "--disable-features=BlockInsecurePrivateNetworkRequests",
+    ]
+    
+    browser = p.chromium.launch(
+        headless=not headed,
+        args=args,
+        slow_mo=SLOW_MO_MS,
+        # Use a persistent context for cookies/session
+    )
+    
     context = browser.new_context(
         viewport={"width": 1920, "height": 1080},
         permissions=["geolocation"],
         geolocation=DEFAULT_GEO,
         accept_downloads=True,
+        locale="en-IN",
+        timezone_id="Asia/Kolkata",
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        color_scheme="light",
+        extra_http_headers={
+            "Accept-Language": "en-IN,en;q=0.9,hi;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "DNT": "1",
+        },
     )
-    context.add_init_script("""
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        window.chrome = { runtime: {} };
-    """)
+    
+    context.add_init_script(ANTI_DETECT_SCRIPT)
+    
     page = context.new_page()
+    
+    # Set additional properties
+    page.evaluate("""
+        () => {
+            Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+            Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 0 });
+        }
+    """)
+    
     return p, browser, context, page
 
 
@@ -80,6 +154,27 @@ def wait_for_resume(page: Page, reason: str) -> bool:
     print(f"Resuming...")
     time.sleep(1)
     return True
+
+
+def safe_goto(page: Page, url: str, timeout: int = 60000, debug_dir: Path = None):
+    """Navigate to URL with retry and error handling."""
+    print(f"  Navigating to: {url}")
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        time.sleep(2)
+        # Check if page loaded properly
+        if page.title() == "" or "error" in page.title().lower():
+            print(f"  WARNING: Page title suspicious: '{page.title()}'")
+            if debug_dir:
+                take_screenshot(page, "navigate_error", debug_dir)
+        else:
+            print(f"  Page title: {page.title()}")
+        return True
+    except Exception as e:
+        print(f"  ERROR navigating: {e}")
+        if debug_dir:
+            take_screenshot(page, "navigate_exception", debug_dir)
+        return False
 
 
 def select_dropdown(page: Page, placeholder_keywords: list, value: str, timeout: int = 15000):
@@ -127,10 +222,17 @@ def fill_input(page: Page, keywords: list, value: str):
 
 # ── Main Automation Flow ─────────────────────────────────────────────
 
-def run_automation(data: dict, headed: bool = True):
+def run_automation(data: dict, headed: bool = True, debug: bool = False):
     reg = data.get("registry", {})
     parties = data.get("parties", [])
     prop = data.get("property", {})
+    
+    # Create debug directory
+    debug_dir = None
+    if debug:
+        debug_dir = Path("debug_screenshots")
+        debug_dir.mkdir(exist_ok=True)
+        print(f"\n  Debug screenshots will be saved to: {debug_dir.absolute()}")
 
     print("\n" + "="*60)
     print("  SAMPADA 2.0 LOCAL AUTOMATION RUNNER")
@@ -141,12 +243,24 @@ def run_automation(data: dict, headed: bool = True):
     print(f"Property: {'YES' if prop else 'NO'}")
     print(f"\nLaunching {'headed' if headed else 'headless'} browser...")
 
-    p, browser, context, page = launch_browser(headed=headed)
+    p, browser, context, page = launch_browser(headed=headed, debug_dir=debug_dir)
+    
+    if debug and debug_dir:
+        take_screenshot(page, "browser_opened", debug_dir)
 
     try:
         # 1. Login page
         print(f"\n[1/8] Navigating to login page...")
-        page.goto(PORTAL_LOGIN, wait_until="networkidle")
+        if not safe_goto(page, PORTAL_LOGIN, debug_dir=debug_dir):
+            print("  Failed to load login page. Retrying in 5 seconds...")
+            time.sleep(5)
+            if not safe_goto(page, PORTAL_LOGIN, debug_dir=debug_dir):
+                print("  ERROR: Could not load login page after retry. Exiting.")
+                return
+        
+        if debug and debug_dir:
+            take_screenshot(page, "login_page", debug_dir)
+        
         if not wait_for_resume(page, "LOGIN: Enter username, password, captcha, and OTP. Then click Login."):
             return
 
@@ -158,16 +272,26 @@ def run_automation(data: dict, headed: bool = True):
         except Exception:
             print("  WARNING: Dashboard not detected. Assuming user logged in.")
             time.sleep(3)
+        
+        if debug and debug_dir:
+            take_screenshot(page, "dashboard", debug_dir)
 
         # 3. Navigate to e-Registry
         print(f"\n[3/8] Navigating to e-Registry...")
-        page.goto(PORTAL_E_REGISTRY, wait_until="networkidle")
+        if not safe_goto(page, PORTAL_E_REGISTRY, debug_dir=debug_dir):
+            print("  Could not navigate to e-Registry.")
+            return
+        
         try:
             page.get_by_role("link", name=re.compile("e-registry|e-रजिस्ट्री|new|नया", re.IGNORECASE)).first.click(timeout=5000)
         except Exception:
             print("  Could not auto-click e-Registry link. Please click manually.")
-            wait_for_resume(page, "E-REGISTRY: Click 'New Registry' or 'e-Registry' link.")
+            if not wait_for_resume(page, "E-REGISTRY: Click 'New Registry' or 'e-Registry' link."):
+                return
         time.sleep(2)
+        
+        if debug and debug_dir:
+            take_screenshot(page, "e_registry", debug_dir)
 
         # 4. Deed Category selection
         print(f"\n[4/8] Selecting deed category...")
@@ -254,6 +378,8 @@ def run_automation(data: dict, headed: bool = True):
         print(f"\nERROR: {e}")
         import traceback
         traceback.print_exc()
+        if debug and debug_dir:
+            take_screenshot(page, "fatal_error", debug_dir)
     finally:
         print(f"\nClosing browser in 5 seconds...")
         time.sleep(5)
@@ -270,6 +396,7 @@ def main():
     parser.add_argument("--registry", "-r", required=True, help="Path to the JSON export from the cloud dashboard")
     parser.add_argument("--headed", action="store_true", default=True, help="Run in headed mode (default)")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode (not recommended for Sampada)")
+    parser.add_argument("--debug", action="store_true", help="Enable debug screenshots")
     args = parser.parse_args()
 
     registry_path = Path(args.registry)
@@ -279,7 +406,7 @@ def main():
 
     data = load_registry(str(registry_path))
     headed = args.headed and not args.headless
-    run_automation(data, headed=headed)
+    run_automation(data, headed=headed, debug=args.debug)
 
 
 if __name__ == "__main__":
