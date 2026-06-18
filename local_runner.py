@@ -166,24 +166,55 @@ def scroll_to_element(page: Page, element):
         pass
 
 
-def select_dropdown(page: Page, placeholder_keywords: list, value: str, timeout: int = 15000):
+def select_dropdown(page: Page, placeholder_keywords: list, value: str, timeout: int = 30000):
+    """Wait for dropdown to be populated and select option."""
     try:
+        # First, try to find the dropdown
         selects = page.query_selector_all("select")
+        target_sel = None
         for sel in selects:
             label = (sel.get_attribute("aria-label") or "").lower()
             placeholder = (sel.get_attribute("placeholder") or "").lower()
             id_attr = (sel.get_attribute("id") or "").lower()
             combined = f"{label} {placeholder} {id_attr}"
             if any(kw in combined for kw in placeholder_keywords):
-                scroll_to_element(page, sel)
-                sel.select_option(label=value)
-                time.sleep(1.5)
-                return True
-        if len(selects) > 0 and value:
-            scroll_to_element(page, selects[0])
-            selects[0].select_option(label=value)
-            time.sleep(1.5)
+                target_sel = sel
+                break
+        
+        if not target_sel and len(selects) > 0:
+            target_sel = selects[0]
+        
+        if not target_sel or not value:
+            return False
+        
+        # Scroll into view
+        scroll_to_element(page, target_sel)
+        
+        # Wait for dropdown to have options (not just empty)
+        print(f"  Waiting for dropdown options to load...")
+        for attempt in range(10):
+            options = target_sel.query_selector_all("option")
+            if len(options) > 1:
+                print(f"  Found {len(options)} options in dropdown")
+                break
+            time.sleep(1)
+        
+        # Try to select by value or label
+        try:
+            target_sel.select_option(value=value)
+            print(f"  Selected by value: {value}")
+            time.sleep(2)
             return True
+        except Exception:
+            try:
+                target_sel.select_option(label=value)
+                print(f"  Selected by label: {value}")
+                time.sleep(2)
+                return True
+            except Exception:
+                print(f"  Could not select '{value}' - option not found")
+                return False
+                
     except Exception as e:
         print(f"  Dropdown warning: {e}")
     return False
