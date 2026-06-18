@@ -1,0 +1,52 @@
+{
+  "mock_gemini_id_response": {
+    "name_english": "Ramesh Kumar",
+    "name_hindi": "रमेश कुमार",
+    "father_husband_name_english": "Suresh Kumar",
+    "father_husband_name_hindi": "सुरेश कुमार",
+    "dob": "15-08-1985",
+    "gender": "Male",
+    "address_english": "123, Scheme 54, Indore, Madhya Pradesh",
+    "address_hindi": "123, स्कीम 54, इंदौर, मध्य प्रदेश",
+    "id_type": "Aadhaar",
+    "id_number": "123456789012",
+    "pan_number": null,
+    "mobile_number": "9876543210",
+    "category": "General"
+  },
+  "mock_gemini_pan_response": {
+    "name_english": "Mahesh Sharma",
+    "name_hindi": "महेश शर्मा",
+    "father_husband_name_english": "Ganesh Sharma",
+    "father_husband_name_hindi": "गणेश शर्मा",
+    "dob": "22-03-1990",
+    "gender": "Male",
+    "address_english": "45, Vijay Nagar, Indore",
+    "address_hindi": "45, विजय नगर, इंदौर",
+    "id_type": "PAN",
+    "id_number": "ABCDE1234F",
+    "pan_number": "ABCDE1234F",
+    "mobile_number": "8765432109",
+    "category": "OBC"
+  },
+  "mock_gemini_property_response": {
+    "district": "Indore",
+    "tehsil": "Indore",
+    "area_type": "Urban",
+    "ward_colony_name": "Scheme 54",
+    "plot_number": "123",
+    "total_area_sqmt": 150.0,
+    "constructed_area_sqmt": 120.0,
+    "road_width_mt": 9.0,
+    "boundaries": {
+      "east": "Plot 124",
+      "west": "Road",
+      "north": "Plot 122",
+      "south": "Plot 126"
+    },
+    "valuation_circle_rate": 4500.0,
+    "market_value": 675000.0,
+    "old_deed_number": "1234/2020",
+    "property_type": "Residential"
+  }
+}
