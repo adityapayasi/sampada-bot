@@ -398,9 +398,14 @@ with review_tab:
                 prop["ward_colony_name"] = st.text_input("Ward/Colony", prop.get("ward_colony_name", ""), key="prop_ward")
                 prop["plot_number"] = st.text_input("Plot Number", prop.get("plot_number", ""), key="prop_plot")
             with pc2:
-                prop["total_area_sqmt"] = st.number_input("Total Area", value=float(prop.get("total_area_sqmt", 0.0)), key="prop_total")
-                prop["constructed_area_sqmt"] = st.number_input("Built-up Area", value=float(prop.get("constructed_area_sqmt", 0.0)), key="prop_built")
-                prop["road_width_mt"] = st.number_input("Road Width", value=float(prop.get("road_width_mt", 0.0)), key="prop_road")
+                def safe_float(val, default=0.0):
+                    try:
+                        return float(val) if val not in (None, "", []) else default
+                    except (ValueError, TypeError):
+                        return default
+                prop["total_area_sqmt"] = st.number_input("Total Area", value=safe_float(prop.get("total_area_sqmt")), key="prop_total")
+                prop["constructed_area_sqmt"] = st.number_input("Built-up Area", value=safe_float(prop.get("constructed_area_sqmt")), key="prop_built")
+                prop["road_width_mt"] = st.number_input("Road Width", value=safe_float(prop.get("road_width_mt")), key="prop_road")
             b = prop.get("boundaries", {})
             c1, c2, c3, c4 = st.columns(4)
             with c1: b["north"] = st.text_input("North", b.get("north", ""), key="b_n")
