@@ -116,10 +116,19 @@ def add_document(rid, doc):
 def get_documents(rid):
     return st.session_state["documents"].get(rid, [])
 
+# ── Gemini API Key Resolution (Secrets → Sidebar → Env) ──────────────────
+def get_gemini_key():
+    """Return the first available Gemini key from secrets, session_state, or env."""
+    return (
+        st.secrets.get("GEMINI_API_KEY", "")
+        or os.environ.get("GEMINI_API_KEY", "")
+        or st.session_state.get("gemini_key", "")
+    )
+
 # ── Gemini AI Parser (Cloud-compatible) ───────────────────────────────────
 @st.cache_resource
 def get_gemini_model():
-    key = st.session_state.get("gemini_key", "")
+    key = get_gemini_key()
     if not key:
         return None
     try:
@@ -186,11 +195,15 @@ with st.sidebar:
     st.markdown("<div class='hint-text'>Cloud Edition - Prepare data here, automate locally</div>", unsafe_allow_html=True)
     st.divider()
 
-    # Gemini API Key
-    key = st.text_input("🔑 Gemini API Key", value=st.session_state.get("gemini_key", ""), type="password", key="gemini_key_input")
-    if key:
-        st.session_state["gemini_key"] = key
-        st.success("✅ Key set")
+    # Gemini API Key (from secrets, env, or manual input)
+    secret_key = st.secrets.get("GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
+    if secret_key:
+        st.success("✅ Gemini API Key loaded from Secrets")
+    else:
+        key = st.text_input("🔑 Gemini API Key (manual)", value=st.session_state.get("gemini_key", ""), type="password", key="gemini_key_input")
+        if key:
+            st.session_state["gemini_key"] = key
+            st.success("✅ Key set manually")
 
     st.divider()
     st.subheader("📋 Registries")
