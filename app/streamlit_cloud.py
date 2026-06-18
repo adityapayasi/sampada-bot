@@ -134,20 +134,17 @@ def get_gemini_model():
     try:
         import google.generativeai as genai
         genai.configure(api_key=key)
-        # Try newer model names first (Google changed API naming)
-        model_names = [
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-flash-001",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro-latest",
-            "gemini-1.5-pro",
-        ]
-        for name in model_names:
-            try:
-                return genai.GenerativeModel(name)
-            except Exception:
-                continue
-        return None
+        # List available models and pick the first one that supports generateContent
+        available_models = [m for m in genai.list_models() if "generateContent" in m.supported_generation_methods]
+        if not available_models:
+            st.error("No Gemini models available for this API key. Check if Generative Language API is enabled at https://makersuite.google.com/app/apikey")
+            return None
+        # Prefer flash models, then pro, then any
+        for preferred in ["flash", "pro"]:
+            for m in available_models:
+                if preferred in m.name.lower():
+                    return genai.GenerativeModel(m.name)
+        return genai.GenerativeModel(available_models[0].name)
     except Exception as e:
         st.error(f"Gemini init failed: {e}")
         return None
@@ -217,6 +214,18 @@ with st.sidebar:
         if key:
             st.session_state["gemini_key"] = key
             st.success("✅ Key set manually")
+
+    # Show available models for debugging
+    if get_gemini_key():
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=get_gemini_key())
+            available = [m.name for m in genai.list_models() if "generateContent" in m.supported_generation_methods]
+            if available:
+                with st.expander("🔧 Available Gemini Models"):
+                    st.write(available)
+        except Exception:
+            pass
 
     st.divider()
     st.subheader("📋 Registries")
