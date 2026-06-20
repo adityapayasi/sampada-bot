@@ -167,63 +167,79 @@ def scroll_to_element(page: Page, element):
 
 
 def select_dropdown(page: Page, placeholder_keywords: list, value: str, timeout: int = 30000):
-    """Wait for dropdown to be populated and select option."""
+    """Wait for dropdown to be populated and select option across all frames."""
     try:
-        # First, try to find the dropdown
-        selects = page.query_selector_all("select")
+        all_selects = []
+        try:
+            all_selects.extend(page.query_selector_all("select"))
+        except Exception:
+            pass
+        for frame in page.frames:
+            try:
+                all_selects.extend(frame.query_selector_all("select"))
+            except Exception:
+                pass
+
         target_sel = None
-        for sel in selects:
+        for sel in all_selects:
             label = (sel.get_attribute("aria-label") or "").lower()
             placeholder = (sel.get_attribute("placeholder") or "").lower()
             id_attr = (sel.get_attribute("id") or "").lower()
-            combined = f"{label} {placeholder} {id_attr}"
+            name_attr = (sel.get_attribute("name") or "").lower()
+            combined = f"{label} {placeholder} {id_attr} {name_attr}"
             if any(kw in combined for kw in placeholder_keywords):
                 target_sel = sel
                 break
         
-        if not target_sel and len(selects) > 0:
-            target_sel = selects[0]
+        if not target_sel and len(all_selects) > 0:
+            target_sel = all_selects[0]
         
         if not target_sel or not value:
             return False
         
-        # Scroll into view
         scroll_to_element(page, target_sel)
         
-        # Wait for dropdown to have options (not just empty)
-        print(f"  Waiting for dropdown options to load...")
         for attempt in range(10):
             options = target_sel.query_selector_all("option")
             if len(options) > 1:
-                print(f"  Found {len(options)} options in dropdown")
                 break
-            time.sleep(1)
+            time.sleep(0.5)
         
-        # Try to select by value or label
         try:
             target_sel.select_option(value=value)
-            print(f"  Selected by value: {value}")
-            time.sleep(2)
+            print(f"    [SELECT] Selected by value: '{value}'")
+            time.sleep(1)
             return True
         except Exception:
             try:
                 target_sel.select_option(label=value)
-                print(f"  Selected by label: {value}")
-                time.sleep(2)
+                print(f"    [SELECT] Selected by label: '{value}'")
+                time.sleep(1)
                 return True
             except Exception:
-                print(f"  Could not select '{value}' - option not found")
+                print(f"    [SELECT WARN] Could not select option '{value}' in dropdown")
                 return False
                 
     except Exception as e:
-        print(f"  Dropdown warning: {e}")
+        print(f"    [SELECT ERROR] Dropdown warning: {e}")
     return False
 
 
 def fill_input(page: Page, keywords: list, value: str):
+    """Fill input field matching keywords across all frames."""
     try:
-        inputs = page.query_selector_all("input, textarea")
-        for inp in inputs:
+        all_inputs = []
+        try:
+            all_inputs.extend(page.query_selector_all("input, textarea"))
+        except Exception:
+            pass
+        for frame in page.frames:
+            try:
+                all_inputs.extend(frame.query_selector_all("input, textarea"))
+            except Exception:
+                pass
+
+        for inp in all_inputs:
             if not value:
                 continue
             placeholder = (inp.get_attribute("placeholder") or "").lower()
@@ -243,16 +259,28 @@ def fill_input(page: Page, keywords: list, value: str):
 
 
 def click_button(page: Page, keywords: list, timeout: int = 3000):
-    """Try to find and click a button by keyword."""
+    """Try to find and click a button by keyword across all frames."""
     try:
-        buttons = page.query_selector_all("button, [role='button'], a, input[type='submit']")
-        for btn in buttons:
+        all_buttons = []
+        try:
+            all_buttons.extend(page.query_selector_all("button, [role='button'], a, input[type='submit']"))
+        except Exception:
+            pass
+        for frame in page.frames:
+            try:
+                all_buttons.extend(frame.query_selector_all("button, [role='button'], a, input[type='submit']"))
+            except Exception:
+                pass
+
+        for btn in all_buttons:
             text = (btn.inner_text() or "").lower()
             aria = (btn.get_attribute("aria-label") or "").lower()
-            combined = f"{text} {aria}"
+            id_attr = (btn.get_attribute("id") or "").lower()
+            combined = f"{text} {aria} {id_attr}"
             if any(kw in combined for kw in keywords):
                 scroll_to_element(page, btn)
                 btn.click()
+                print(f"    [CLICK] Clicked element matching {keywords}")
                 time.sleep(1.5)
                 return True
     except Exception:
