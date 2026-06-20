@@ -234,9 +234,11 @@ def fill_input(page: Page, keywords: list, value: str):
             if any(kw in combined for kw in keywords):
                 scroll_to_element(page, inp)
                 inp.fill(value)
+                print(f"    [FILL] Filled field matching {keywords} with '{value}'")
                 return True
-    except Exception:
-        pass
+        print(f"    [WARN] No input field found matching keywords: {keywords}")
+    except Exception as e:
+        print(f"    [ERROR] Failed to fill field matching {keywords}: {e}")
     return False
 
 
@@ -359,6 +361,12 @@ def run_automation(data: dict, headed: bool = True, debug: bool = False):
 
         # 6. Property details filling
         print(f"\n[6/8] Filling property details...")
+        try:
+            page.wait_for_selector("input", state="visible", timeout=10000)
+            time.sleep(2)
+        except Exception:
+            print("  [WARN] Timeout waiting for inputs to load on Property page. Attempting to fill...")
+
         fill_input(page, ["plot"], prop.get("plot_number", ""))
         fill_input(page, ["total area"], str(prop.get("total_area_sqmt", "")))
         fill_input(page, ["constructed", "built"], str(prop.get("constructed_area_sqmt", "")))
@@ -376,6 +384,12 @@ def run_automation(data: dict, headed: bool = True, debug: bool = False):
 
         # 7. Party filling
         print(f"\n[7/8] Filling party details ({len(parties)} parties)...")
+        try:
+            page.wait_for_selector("input", state="visible", timeout=10000)
+            time.sleep(2)
+        except Exception:
+            print("  [WARN] Timeout waiting for inputs to load on Parties page. Attempting to fill...")
+
         for party in parties:
             role = party.get("role", "Party")
             print(f"  Adding {role}: {party.get('name_english', '')}")
