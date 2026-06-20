@@ -189,6 +189,9 @@ class SampadaAutomation:
             update_registry(self.registry_id, {"current_step": "error", "error_log": str(e)})
         finally:
             self._close()
+            global _current_bot
+            if _current_bot is self:
+                _current_bot = None
 
     def _run_login_step(self) -> None:
         # 1. Navigate to login
@@ -466,3 +469,8 @@ def stop_bot(registry_id: int) -> None:
         _current_bot.stop()
     else:
         logger.warning("No active bot for registry %d to stop", registry_id)
+
+
+def is_bot_running(registry_id: int) -> bool:
+    global _current_bot
+    return _current_bot is not None and _current_bot.registry_id == registry_id

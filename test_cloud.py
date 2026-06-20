@@ -58,6 +58,15 @@ def main(ctx):
     # Test 1: Import streamlit_cloud module
     print("[1] Testing streamlit_cloud.py import...")
     try:
+        # Pre-populate session state so the module-level code runs without throwing
+        mock_st.session_state["registries"] = [{"id": 1, "title": "Test Deed"}]
+        mock_st.session_state["current_registry_id"] = 1
+        mock_st.session_state["parties"] = {1: []}
+        mock_st.session_state["properties"] = {1: {}}
+        mock_st.session_state["documents"] = {1: []}
+        mock_st.session_state["parsed_cache"] = {}
+        mock_st.session_state["gemini_key"] = "demo-key"
+        
         import importlib
         import app.streamlit_cloud as cloud_app
         importlib.reload(cloud_app)  # re-run to test init_state
@@ -90,12 +99,26 @@ def main(ctx):
     # Test 3: Test cloud app data model functions
     print("\n[3] Testing cloud data model...")
     try:
-        # Reset session state
+        # Reset session state and pre-populate so it passes import/reload
         mock_st.session_state = MockSessionState()
+        mock_st.session_state["registries"] = [{"id": 1, "title": "Test Deed"}]
+        mock_st.session_state["current_registry_id"] = 1
+        mock_st.session_state["parties"] = {1: []}
+        mock_st.session_state["properties"] = {1: {}}
+        mock_st.session_state["documents"] = {1: []}
+        mock_st.session_state["parsed_cache"] = {}
+        mock_st.session_state["gemini_key"] = "demo-key"
         
         # Re-import to get fresh functions with new state
         import app.streamlit_cloud as cloud
         importlib.reload(cloud)
+        
+        # Clean session state so that add_registry starts at ID 1
+        mock_st.session_state["registries"] = []
+        mock_st.session_state["current_registry_id"] = 0
+        mock_st.session_state["parties"] = {}
+        mock_st.session_state["properties"] = {}
+        mock_st.session_state["documents"] = {}
         
         rid = cloud.add_registry("Test Deed")
         assert rid == 1

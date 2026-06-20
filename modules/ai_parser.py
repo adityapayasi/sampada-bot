@@ -45,7 +45,9 @@ SAFETY_SETTINGS = {
 def _load_image(path: str | Path):
     """Return a PIL Image from disk."""
     from PIL import Image
-    return Image.open(path)
+    with Image.open(path) as img:
+        img.load()
+        return img
 
 
 def _extract_json(text: str) -> Optional[Dict[str, Any]]:
@@ -94,7 +96,10 @@ def _clean_id_data(raw: Dict[str, Any], role_hint: str = "") -> Dict[str, Any]:
     cleaned["pan_number"] = pan
 
     mobile = str(raw.get("mobile_number", "")).strip()
-    cleaned["mobile_number"] = re.sub(r"\D", "", mobile)
+    mobile_digits = re.sub(r"\D", "", mobile)
+    if len(mobile_digits) > 10:
+        mobile_digits = mobile_digits[-10:]
+    cleaned["mobile_number"] = mobile_digits
     cleaned["category"] = str(raw.get("category", "")).strip() or "General"
     return cleaned
 

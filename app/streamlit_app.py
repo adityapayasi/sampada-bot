@@ -28,6 +28,7 @@ from modules.db_manager import (
     add_document,
     get_documents,
     log_automation,
+    get_logs,
 )
 from modules.ai_parser import parse_id_card, parse_property_document
 from modules.transliterator import transliterate_text
@@ -363,36 +364,49 @@ with automation_tab:
         instrument = st.text_input("Instrument Type (if known)", key="auto_inst")
     with col3:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🤖 Start Browser Automation", use_container_width=True, type="primary"):
-            update_registry(registry_id, {
-                "deed_category": deed,
-                "instrument": instrument,
-                "current_step": "login_wait",
-            })
-            st.info("Launching headed browser... Please wait.")
-            # Launch automation in a separate thread/process
-            try:
-                from modules.playwright_automation import SampadaAutomation
-                bot = SampadaAutomation(registry_id)
-                bot.start_automation()
-                st.success("Browser launched! Check the new Chrome window. Solve login + captcha, then click 'Resume' here.")
-            except Exception as e:
-                st.error(f"Failed to launch automation: {e}")
-                log_automation(registry_id, "launch", "error", str(e))
+        from modules.playwright_automation import is_bot_running
+        active = is_bot_running(registry_id)
+        if active:
+            st.info("🤖 Browser Automation is active and running in the background.")
+        else:
+            if st.button("🤖 Start Browser Automation", use_container_width=True, type="primary"):
+                update_registry(registry_id, {
+                    "deed_category": deed,
+                    "instrument": instrument,
+                    "current_step": "login_wait",
+                })
+                st.info("Launching headed browser in background... Please wait.")
+                try:
+                    from modules.playwright_automation import SampadaAutomation
+                    import threading
+                    bot = SampadaAutomation(registry_id)
+                    # Start the automation in a background thread to prevent Streamlit from freezing
+                    thread = threading.Thread(target=bot.start_automation, daemon=True)
+                    thread.start()
+                    st.success("Browser launching process started! Look for a Chrome window. Log in, then click 'Resume' below.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to launch automation: {e}")
+                    log_automation(registry_id, "launch", "error", str(e))
 
     st.divider()
     st.subheader("⏸️ Pause / Resume Controls")
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("▶️ Resume Bot", use_container_width=True):
             from modules.playwright_automation import resume_bot
             resume_bot(registry_id)
             st.success("Resume signal sent")
+            st.rerun()
     with c2:
         if st.button("⏹️ Stop Bot", use_container_width=True):
             from modules.playwright_automation import stop_bot
             stop_bot(registry_id)
             st.warning("Stop signal sent")
+            st.rerun()
+    with c3:
+        if st.button("🔄 Refresh Status", use_container_width=True):
+            st.rerun()
 
     st.divider()
     st.subheader("📜 Automation Logs")
