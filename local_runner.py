@@ -353,8 +353,29 @@ def run_automation(data: dict, headed: bool = True, debug: bool = False):
             time.sleep(2)
         print("  Dropdowns filled.")
 
-        # 6. Party filling
-        print(f"\n[6/8] Filling party details ({len(parties)} parties)...")
+        # Pause to let the user navigate to the Plot Identification page
+        if not wait_for_resume(page, "PROPERTY STEP: If needed, click Proceed/Next in the browser to navigate to the Plot Identification (Property details) page."):
+            return
+
+        # 6. Property details filling
+        print(f"\n[6/8] Filling property details...")
+        fill_input(page, ["plot"], prop.get("plot_number", ""))
+        fill_input(page, ["total area"], str(prop.get("total_area_sqmt", "")))
+        fill_input(page, ["constructed", "built"], str(prop.get("constructed_area_sqmt", "")))
+        fill_input(page, ["road", "width"], str(prop.get("road_width_mt", "")))
+        b = prop.get("boundaries", {})
+        fill_input(page, ["north"], b.get("north", ""))
+        fill_input(page, ["south"], b.get("south", ""))
+        fill_input(page, ["east"], b.get("east", ""))
+        fill_input(page, ["west"], b.get("west", ""))
+        print("  Property filled.")
+
+        # Pause to let the user save the property and navigate to the Parties page
+        if not wait_for_resume(page, "PARTY STEP: Click Save/Next on the property page to navigate to the Party details page."):
+            return
+
+        # 7. Party filling
+        print(f"\n[7/8] Filling party details ({len(parties)} parties)...")
         for party in parties:
             role = party.get("role", "Party")
             print(f"  Adding {role}: {party.get('name_english', '')}")
@@ -393,19 +414,6 @@ def run_automation(data: dict, headed: bool = True, debug: bool = False):
                 except Exception:
                     pass
             print(f"  {role} filled.")
-
-        # 7. Property
-        print(f"\n[7/8] Filling property details...")
-        fill_input(page, ["plot"], prop.get("plot_number", ""))
-        fill_input(page, ["total area"], str(prop.get("total_area_sqmt", "")))
-        fill_input(page, ["constructed", "built"], str(prop.get("constructed_area_sqmt", "")))
-        fill_input(page, ["road", "width"], str(prop.get("road_width_mt", "")))
-        b = prop.get("boundaries", {})
-        fill_input(page, ["north"], b.get("north", ""))
-        fill_input(page, ["south"], b.get("south", ""))
-        fill_input(page, ["east"], b.get("east", ""))
-        fill_input(page, ["west"], b.get("west", ""))
-        print("  Property filled.")
 
         # 8. KYC / Payment
         print(f"\n[8/8] Reaching KYC / Biometric step...")
